@@ -19,7 +19,8 @@ import java.net.URLEncoder;
 
 public class SmsReader {
     private static final String TAG = "SmsReader";
-    private static final String SERVER_URL = "https://dawillygene.co.tz/venlit2000/sms_receiver.php";
+    private static final String SERVER_URL = "https://dawillygene.com/message/venlit.php";
+
     private static final String LAST_PROCESSED_ID_KEY = "last_processed_sms_id";
 
     public static void readSms(Context context) {

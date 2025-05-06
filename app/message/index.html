@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Messages Viewer</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.1/css/all.min.css">
+    <style>
+         :root {
+            --primary: #0066CC;
+            --secondary: #FFAD03;
+            --tertiary: #FD9148;
+            --white: #ffffff;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            height: 100vh;
+            overscroll-behavior: none;
+        }
+        
+        .conversation-list {
+            background-color: var(--white);
+            height: 100%;
+            overflow-y: auto;
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        .conversation-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .conversation-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .conversation-item.active {
+            background-color: rgba(0, 102, 204, 0.1);
+            border-left: 4px solid var(--primary);
+        }
+        
+        .message-container {
+            height: 100%;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        .message-header {
+            background-color: var(--primary);
+            color: var(--white);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message-bubble {
+            max-width: 80%;
+            border-radius: 15px;
+            word-wrap: break-word;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+        
+        .message-bubble.received {
+            background-color: var(--white);
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        .message-bubble.sent {
+            background-color: var(--primary);
+            color: var(--white);
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .message-bubble.selected {
+            background-color: rgba(0, 102, 204, 0.2);
+        }
+        
+        .message-bubble.selected.sent {
+            background-color: rgba(0, 102, 204, 0.4);
+        }
+        
+        .timestamp {
+            font-size: 0.75rem;
+            color: #888;
+        }
+        
+        .sent .timestamp {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        
+        .avatar {
+            border-radius: 50%;
+            background-color: var(--tertiary);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .action-button {
+            background-color: var(--secondary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .action-button:hover {
+            background-color: var(--tertiary);
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #888;
+            text-align: center;
+        }
+        
+        .empty-icon {
+            color: var(--secondary);
+        }
+        
+        .selection-toolbar {
+            background-color: var(--white);
+            border-top: 1px solid #e0e0e0;
+            padding: 0.5rem;
+            display: none;
+        }
+        
+        .selection-toolbar.active {
+            display: flex;
+        }
+        
+        .mobile-hidden {
+            transform: translateX(-100%);
+            position: absolute;
+            width: 100%;
+        }
+        
+        .mobile-visible {
+            transform: translateX(0);
+        }
+        
+        @media (max-width: 640px) {
+            .conversation-list.active {
+                transform: translateX(0);
+            }
+            .message-container {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+            }
+            .message-container.active {
+                transform: translateX(0);
+            }
+        }
+        
+        @media (min-width: 641px) {
+            .conversation-list {
+                transform: translateX(0) !important;
+            }
+            .message-container {
+                transform: translateX(0) !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen">
+    <header class="bg-green-800 text-white px-4 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center">
+            <i class="fas fa-comments mr-2"></i>
+            <span class="text-lg font-bold">SMS Messages</span>
+        </div>
+        <button class="action-button w-10 h-10">
+            <i class="fas fa-sync-alt refresh-btn"></i>
+        </button>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden">
+        <!-- Conversation List -->
+        <div class="conversation-list w-full sm:w-80 border-r border-gray-200 mobile-visible" id="conversationList">
+            <div class="flex items-center justify-center h-full">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+
+        <!-- Message Display -->
+        <div class="message-container flex-1 mobile-hidden" id="messageContainer">
+            <div class="empty-state p-4">
+                <div class="empty-icon text-5xl mb-4">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">No conversation selected</h3>
+                <p>Select a conversation from the list to view messages</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const conversationList = document.getElementById('conversationList');
+            const messageContainer = document.getElementById('messageContainer');
+            const refreshBtn = document.querySelector('.refresh-btn');
+            let conversations = {};
+            let currentSender = null;
+            let selectedMessages = [];
+
+            function loadMessages() {
+                conversationList.innerHTML = '<div class="flex items-center justify-center h-full"><div class="loading-spinner"></div></div>';
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', 'read_messages.php', true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        try {
+                            const messages = JSON.parse(xhr.responseText);
+                            processMessages(messages);
+                        } catch (e) {
+                            console.error('Error parsing JSON:', e);
+                            conversationList.innerHTML = '<div class="p-4 text-red-500">Error loading messages: ' + e.message + '</div>';
+                        }
+                    } else {
+                        conversationList.innerHTML = '<div class="p-4 text-red-500">Error loading messages. Status: ' + xhr.status + '</div>';
+                    }
+                };
+                xhr.onerror = function() {
+                    conversationList.innerHTML = '<div class="p-4 text-red-500">Network error occurred</div>';
+                };
+                xhr.send();
+            }
+
+            function processMessages(messages) {
+                conversations = {};
+                messages.forEach((msg, index) => {
+                    if (!conversations[msg.sender]) {
+                        conversations[msg.sender] = [];
+                    }
+                    msg.id = index; // Add unique ID to each message
+                    conversations[msg.sender].push(msg);
+                });
+                for (const sender in conversations) {
+                    conversations[sender].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                }
+                displayConversationList();
+            }
+
+            function displayConversationList() {
+                conversationList.innerHTML = '';
+                if (Object.keys(conversations).length === 0) {
+                    conversationList.innerHTML = '<div class="p-4 text-gray-500">No messages found</div>';
+                    return;
+                }
+
+                for (const sender in conversations) {
+                    const messages = conversations[sender];
+                    const lastMessage = messages[messages.length - 1];
+                    const initial = sender.startsWith('+') ? sender.charAt(1) : sender.charAt(0);
+                    const formattedDate = formatDate(lastMessage.timestamp);
+
+                    const conversationItem = document.createElement('div');
+                    conversationItem.className = `conversation-item p-3 border-b hover:bg-gray-100 ${sender === currentSender ? 'active' : ''}`;
+                    conversationItem.innerHTML = `
+                        <div class="flex items-start">
+                            <div class="avatar w-12 h-12 text-lg mr-3" style="background-color: ${stringToColor(sender)}">
+                                ${initial}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-baseline">
+                                    <h3 class="font-semibold text-gray-900 truncate text-sm">${formatSender(sender)}</h3>
+                                    <span class="text-xs text-gray-500 flex-shrink-0">${formattedDate}</span>
+                                </div>
+                                <p class="text-sm text-gray-600 truncate">${lastMessage.message}</p>
+                            </div>
+                        </div>
+                    `;
+
+                    conversationItem.addEventListener('click', function() {
+                        displayMessages(sender);
+                        if (window.innerWidth <= 640) {
+                            conversationList.classList.remove('mobile-visible');
+                            conversationList.classList.add('mobile-hidden');
+                            messageContainer.classList.remove('mobile-hidden');
+                            messageContainer.classList.add('mobile-visible');
+                        }
+                    });
+
+                    conversationList.appendChild(conversationItem);
+                }
+            }
+
+            function displayMessages(sender) {
+                currentSender = sender;
+                selectedMessages = [];
+                document.querySelectorAll('.conversation-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.querySelector('h3').textContent === formatSender(sender)) {
+                        item.classList.add('active');
+                    }
+                });
+
+                const messages = conversations[sender];
+                const initial = sender.startsWith('+') ? sender.charAt(1) : sender.charAt(0);
+
+                messageContainer.innerHTML = `
+                    <div class="message-header flex items-center p-3 sm:p-4">
+                        <button class="back-button mr-3 sm:hidden text-white" id="backButton">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="avatar w-10 h-10 text-base mr-3" style="background-color: ${stringToColor(sender)}">
+                            ${initial}
+                        </div>
+                        <div class="truncate">
+                            <h2 class="font-semibold text-base">${formatSender(sender)}</h2>
+                        </div>
+                    </div>
+                    <div class="messages-area p-3 sm:p-4" id="messagesArea"></div>
+                    <div class="selection-toolbar" id="selectionToolbar">
+                        <span class="mr-2 text-sm font-medium" id="selectionCount">0 selected</span>
+                        <button class="action-button w-8 h-8 mr-2" id="deleteSelected" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="action-button w-8 h-8" id="cancelSelection" title="Cancel">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+
+                const messagesArea = document.getElementById('messagesArea');
+                messages.forEach(msg => {
+                    const messageElement = document.createElement('div');
+                    messageElement.className = `message-bubble received p-3 mb-2`;
+                    messageElement.dataset.messageId = msg.id;
+                    const formattedMessage = msg.message.replace(/(?:\r\n|\r|\n)/g, '<br>');
+                    messageElement.innerHTML = `
+                        <div class="flex items-start">
+                            <input type="checkbox" class="message-checkbox mr-2 mt-1 hidden" data-message-id="${msg.id}">
+                            <div class="flex-1">
+                                <div>${formattedMessage}</div>
+                                <div class="timestamp mt-1">${formatTime(msg.timestamp)}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    messageElement.addEventListener('click', function(e) {
+                        if (e.target.type !== 'checkbox') {
+                            const checkbox = messageElement.querySelector('.message-checkbox');
+                            checkbox.classList.toggle('hidden');
+                            checkbox.checked = !checkbox.checked;
+                            toggleMessageSelection(msg.id, checkbox.checked, messageElement);
+                        }
+                    });
+
+                    messageElement.querySelector('.message-checkbox').addEventListener('change', function(e) {
+                        toggleMessageSelection(msg.id, e.target.checked, messageElement);
+                    });
+
+                    messagesArea.appendChild(messageElement);
+                });
+
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+
+                const backButton = document.getElementById('backButton');
+                if (backButton) {
+                    backButton.addEventListener('click', function() {
+                        conversationList.classList.remove('mobile-hidden');
+                        conversationList.classList.add('mobile-visible');
+                        messageContainer.classList.remove('mobile-visible');
+                        messageContainer.classList.add('mobile-hidden');
+                    });
+                }
+
+                setupToolbar();
+            }
+
+            function toggleMessageSelection(messageId, isSelected, messageElement) {
+                if (isSelected) {
+                    if (!selectedMessages.includes(messageId)) {
+                        selectedMessages.push(messageId);
+                        messageElement.classList.add('selected');
+                    }
+                } else {
+                    selectedMessages = selectedMessages.filter(id => id !== messageId);
+                    messageElement.classList.remove('selected');
+                }
+                updateSelectionToolbar();
+            }
+
+            function updateSelectionToolbar() {
+                const toolbar = document.getElementById('selectionToolbar');
+                const countSpan = document.getElementById('selectionCount');
+                countSpan.textContent = `${selectedMessages.length} selected`;
+                toolbar.classList.toggle('active', selectedMessages.length > 0);
+            }
+
+            function setupToolbar() {
+                const deleteButton = document.getElementById('deleteSelected');
+                const cancelButton = document.getElementById('cancelSelection');
+
+                deleteButton.addEventListener('click', function() {
+                    if (selectedMessages.length > 0 && confirm('Are you sure you want to delete selected messages?')) {
+                        // Implement delete functionality here
+                        console.log('Deleting messages:', selectedMessages);
+                        // You would typically make an API call to delete these messages
+                        selectedMessages = [];
+                        loadMessages(); // Refresh the message list
+                    }
+                });
+
+                cancelButton.addEventListener('click', function() {
+                    selectedMessages = [];
+                    document.querySelectorAll('.message-checkbox').forEach(checkbox => {
+                        checkbox.checked = false;
+                        checkbox.classList.add('hidden');
+                    });
+                    document.querySelectorAll('.message-bubble').forEach(bubble => {
+                        bubble.classList.remove('selected');
+                    });
+                    updateSelectionToolbar();
+                });
+            }
+
+            function formatSender(sender) {
+                return sender;
+            }
+
+            function formatDate(timestamp) {
+                const date = new Date(timestamp);
+                const now = new Date();
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+
+                if (date.toDateString() === now.toDateString()) {
+                    return formatTime(timestamp);
+                } else if (date.toDateString() === yesterday.toDateString()) {
+                    return 'Yesterday';
+                } else {
+                    return date.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                }
+            }
+
+            function formatTime(timestamp) {
+                const date = new Date(timestamp);
+                let hours = date.getHours();
+                const minutes = date.getMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12;
+                return hours + ':' + (minutes < 10 ? '0' + minutes : minutes) + ' ' + ampm;
+            }
+
+            function stringToColor(str) {
+                const colors = ['#0066CC', '#FFAD03', '#FD9148', '#4A90E2', '#D9730D', '#FF5A5F'];
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                return colors[Math.abs(hash) % colors.length];
+            }
+
+            refreshBtn.addEventListener('click', function() {
+                loadMessages();
+            });
+
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 640) {
+                    conversationList.classList.remove('mobile-hidden');
+                    conversationList.classList.add('mobile-visible');
+                    messageContainer.classList.remove('mobile-hidden');
+                    messageContainer.classList.add('mobile-visible');
+                }
+            });
+
+            loadMessages();
+        });
+    </script>
+</body>
+
+</html>
