@@ -9,7 +9,10 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -17,23 +20,82 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.dawillygene.venlitgenexombiev2.Poem.PomeMainActivity;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final int PERMISSION_REQUEST_CODE = 100;
+    private SessionManager sessionManager;
+    private Button btnAddPoem;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Initialize session manager
+        sessionManager = new SessionManager(this);
+        
+        // Check if user is logged in
+        if (!sessionManager.isLoggedIn()) {
+            redirectToLogin();
+            return;
+        }
+        
         setContentView(R.layout.activity_main);
+
+        // Initialize views
+        btnAddPoem = findViewById(R.id.btn_add_poem);
+        
+        // Set up click listeners
+        btnAddPoem.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openPoemActivity();
+            }
+        });
 
         Intent intent = new Intent(this, SmsReaderService.class);
         startService(intent);
 
         if (checkAndRequestPermissions()) {
             scheduleSmsReader();
-            Intent intenta = new Intent(this, SmsReaderService.class);
-            startService(intenta);
         }
+    }
+    
+    private void openPoemActivity() {
+        Intent intent = new Intent(MainActivity.this, PomeMainActivity.class);
+        startActivity(intent);
+    }
+    
+    private void redirectToLogin() {
+        Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        
+        if (id == R.id.action_logout) {
+            logout();
+            return true;
+        }
+        
+        return super.onOptionsItemSelected(item);
+    }
+    
+    private void logout() {
+        sessionManager.logoutUser();
+        Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show();
+        redirectToLogin();
     }
 
     private boolean checkAndRequestPermissions() {

@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Install and Run Debug APK",
+			"type": "shell",
+			"command": "./gradlew installDebug",
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"args": []
+		}
+	]
+}

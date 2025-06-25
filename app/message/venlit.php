@@ -20,8 +20,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Check if the data is in the expected format
     parse_str($rawData, $data);
 
-    // Check if the data is valid
-    if (isset($data['sender'], $data['body'], $data['timestamp'])) {
+    // Check if the data is valid - updated to handle both old and new format
+    if (isset($data['address'], $data['body'], $data['timestamp'], $data['type'])) {
+        // New format with message type
+        // Ensure the file exists
+        ensureFileExists($filePath);
+
+        // Format the data to be written to the file
+        $timestamp = date('Y-m-d H:i:s', $data['timestamp'] / 1000); // Convert timestamp to readable format
+        $messageType = strtoupper($data['type']); // SENT or RECEIVED
+        
+        // Add more detailed logging
+        $line = "[" . $timestamp . "] " . $messageType . " | " . $data['address'] . " | " . $data['body'] . "\n";
+
+        // Append the data to the file
+        file_put_contents($filePath, $line, FILE_APPEND);
+
+        // Send a success response with debug info
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'success', 
+            'type' => $messageType,
+            'address' => $data['address'],
+            'timestamp' => $timestamp
+        ]);
+    } elseif (isset($data['sender'], $data['body'], $data['timestamp'])) {
+        // Backward compatibility with old format
         // Ensure the file exists
         ensureFileExists($filePath);
 
@@ -38,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Send an error response if the data is invalid
         header('Content-Type: application/json');
-        echo json_encode(['status' => 'error', 'message' => 'Invalid data']);
+        echo json_encode(['status' => 'error', 'message' => 'Invalid data - missing required fields']);
     }
 } else {
     // Send an error response if the request method is not POST
