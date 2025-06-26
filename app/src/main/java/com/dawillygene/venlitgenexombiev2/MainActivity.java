@@ -145,8 +145,9 @@ public class MainActivity extends AppCompatActivity {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
+        // Set interval to 2 minutes as requested by user
         long interval = 2 * 60 * 1000; // 2 minutes
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), interval, pendingIntent);
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + interval, interval, pendingIntent);
     }
 
 

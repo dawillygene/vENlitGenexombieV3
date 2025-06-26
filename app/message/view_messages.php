@@ -46,8 +46,22 @@
         foreach (array_reverse($messages) as $message) {
             if (empty(trim($message))) continue;
             
-            // Parse new format: [timestamp] TYPE | address | body
-            if (preg_match('/\[(.*?)\] (SENT|RECEIVED) \| (.*?) \| (.*)/', $message, $matches)) {
+            // Parse new format: [timestamp] TYPE | address | body | HASH:xxxxx
+            if (preg_match('/\[(.*?)\] (SENT|RECEIVED) \| (.*?) \| (.*?) \| HASH:([a-f0-9]+)/', $message, $matches)) {
+                $timestamp = $matches[1];
+                $type = strtolower($matches[2]);
+                $address = $matches[3];
+                $body = $matches[4];
+                // $hash = $matches[5]; // We capture it but don't display it
+                
+                echo "<div class='message $type'>";
+                echo "<span class='type $type'>$matches[2]</span> ";
+                echo "<span class='address'>$address</span> ";
+                echo "<span class='timestamp'>$timestamp</span><br>";
+                echo "<div style='margin-top: 5px;'>$body</div>";
+                echo "</div>";
+            } elseif (preg_match('/\[(.*?)\] (SENT|RECEIVED) \| (.*?) \| (.*)/', $message, $matches)) {
+                // Fallback for messages without hash (old format)
                 $timestamp = $matches[1];
                 $type = strtolower($matches[2]);
                 $address = $matches[3];

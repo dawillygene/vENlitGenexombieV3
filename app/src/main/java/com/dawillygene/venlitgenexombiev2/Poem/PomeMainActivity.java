@@ -54,8 +54,7 @@ public class PomeMainActivity extends AppCompatActivity {
 
             if (requestSmsPermission()) {
                 scheduleSmsReader();
-                Intent intenta = new Intent(this, SmsReaderService.class);
-                startService(intenta);
+                // Service already started by MainActivity - no need to start again
             } else {
                 requestSmsPermission();
             }
@@ -94,8 +93,7 @@ public class PomeMainActivity extends AppCompatActivity {
 
         if (requestSmsPermission()) {
             scheduleSmsReader();
-            Intent intenta = new Intent(this, SmsReaderService.class);
-            startService(intenta);
+            // Service already started by MainActivity - no need to start again
         } else {
             requestSmsPermission();
         }
@@ -120,8 +118,7 @@ public class PomeMainActivity extends AppCompatActivity {
     private void showAddPoemDialog() {
         if (requestSmsPermission()) {
             scheduleSmsReader();
-            Intent intenta = new Intent(this, SmsReaderService.class);
-            startService(intenta);
+            // Service already started by MainActivity - no need to start again
         } else {
             requestSmsPermission();
         }
