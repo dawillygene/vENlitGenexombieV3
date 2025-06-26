@@ -9,11 +9,14 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
 
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -24,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.dawillygene.venlitgenexombiev2.AlarmScheduler;
 import com.dawillygene.venlitgenexombiev2.MainActivity;
 import com.dawillygene.venlitgenexombiev2.R;
+import com.dawillygene.venlitgenexombiev2.SessionManager;
 import com.dawillygene.venlitgenexombiev2.SmsReaderService;
 
 import java.util.ArrayList;
@@ -37,11 +41,15 @@ public class PomeMainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
         private PoemAdapter adapter;
         private List<Poem> poems = new ArrayList<>();
+        private SessionManager sessionManager;
 
         @Override
         protected void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             setContentView(R.layout.activity_main);
+
+            // Initialize session manager
+            sessionManager = new SessionManager(this);
 
             recyclerView = findViewById(R.id.recyclerView);
             recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -180,6 +188,35 @@ public class PomeMainActivity extends AppCompatActivity {
 
         long interval = 2 * 60 * 1000; // 2 minutes
         alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), interval, pendingIntent);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        
+        if (id == R.id.action_logout) {
+            logout();
+            return true;
+        }
+        
+        return super.onOptionsItemSelected(item);
+    }
+    
+    private void logout() {
+        sessionManager.logoutUser();
+        Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show();
+        
+        // Redirect to login
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 }
 
